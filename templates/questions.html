@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Questions - Rate the Professionalism</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <div class="container">
+        <h1>Assessment Questions</h1>
+        {% if error %}
+        <div class="error">
+            {{ error }}
+        </div>
+        {% endif %}
+
+        {% if questions %}
+        <form action="{{ url_for('questions_page') }}" method="post">
+            {% for question in questions %}
+            <div class="question">
+                <p><strong>Q{{ loop.index }}: {{ question.text }}</strong></p>
+                {% for option in question.options %}
+                <div class="option">
+                    <input type="radio"
+                           id="q{{ loop.index }}_{{ loop.index0 }}"
+                           name="q{{ loop.index }}"
+                           value="{{ loop.index0 }}"
+                           required
+                           onclick="saveSelection({{ loop.index }}, {{ loop.index0 }})">
+                    <label for="q{{ loop.index }}_{{ loop.index0 }}">{{ option }}</label>
+                </div>
+                {% endfor %}
+                <div class="justification">
+                    <label for="justification{{ loop.index }}">Justification:</label>
+                    <textarea
+                        id="justification{{ loop.index }}"
+                        name="justification{{ loop.index }}"
+                        placeholder="Explain your answer"
+                        required
+                        onchange="saveJustification({{ loop.index }}, this.value)"></textarea>
+                </div>
+            </div>
+            {% endfor %}
+            <button type="submit">Submit</button>
+        </form>
+        {% else %}
+        <p>No questions available. Please <a href="{{ url_for('index') }}">start over</a>.</p>
+        {% endif %}
+    </div>
+
+    <script>
+        // Save selections to localStorage
+        function saveSelection(questionNumber, optionIndex) {
+            localStorage.setItem(`q${questionNumber}_selection`, optionIndex);
+        }
+
+        function saveJustification(questionNumber, text) {
+            localStorage.setItem(`q${questionNumber}_justification`, text);
+        }
+
+        // Restore selections when page loads
+        window.onload = function() {
+            const form = document.querySelector('form');
+            const questions = form.querySelectorAll('.question');
+
+            questions.forEach((question, index) => {
+                const questionNumber = index + 1;
+                const savedSelection = localStorage.getItem(`q${questionNumber}_selection`);
+                const savedJustification = localStorage.getItem(`q${questionNumber}_justification`);
+
+                if (savedSelection !== null) {
+                    const radio = question.querySelector(`#q${questionNumber}_${savedSelection}`);
+                    if (radio) radio.checked = true;
+                }
+
+                if (savedJustification) {
+                    const textarea = question.querySelector(`#justification${questionNumber}`);
+                    if (textarea) textarea.value = savedJustification;
+                }
+            });
+        };
+
+        // Clear localStorage when form is submitted
+        document.querySelector('form').addEventListener('submit', function() {
+            localStorage.clear();
+        });
+    </script>
+</body>
+</html>

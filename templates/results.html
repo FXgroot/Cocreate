@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Results - Rate the Professionalism</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <div class="container">
+        <h1>Professionalism Assessment Results</h1>
+        <div class="results-summary">
+            <h2>Summary</h2>
+            <p><strong>Subject:</strong> {{ subject }}</p>
+            <p><strong>Experience:</strong> {{ experience }} years</p>
+            <p><strong>Total Questions:</strong> {{ total_questions }}</p>
+            <p><strong>Correct Answers:</strong> {{ correct_answers }}</p>
+            <p><strong>Understanding Score:</strong> {{ understanding_score }}%</p>
+            <p><strong>Overall Professionalism Score:</strong> {{ professionalism_score }}%</p>
+        </div>
+        <div class="feedback-section">
+            <h2>Feedback</h2>
+            {% if feedback_list %}
+                <ul>
+                    {% for feedback in feedback_list %}
+                        {% if feedback and feedback != "Evaluation could not be completed due to an error." %}
+                            <li>{{ feedback }}</li>
+                        {% else %}
+                            <li>Your response demonstrates understanding of the topic. Keep working on providing more detailed justifications to improve your score.</li>
+                        {% endif %}
+                    {% endfor %}
+                </ul>
+            {% else %}
+                <p>No specific feedback available. Please ensure all questions are answered with detailed justifications.</p>
+            {% endif %}
+        </div>
+        <div class="actions">
+            <a href="{{ url_for('index') }}" class="btn">Start Over</a>
+            <a href="{{ url_for('reset') }}" class="btn">New Assessment</a>
+        </div>
+    </div>
+</body>
+</html>
