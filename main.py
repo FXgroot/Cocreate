@@ -1,8 +1,8 @@
 import json
 import os
-import openai
 import time
 import logging
+import requests
 from typing import List, Dict, Optional
 from dataclasses import dataclass
 from flask import Flask, render_template, request, redirect, url_for, session
@@ -14,62 +14,19 @@ logger = logging.getLogger(__name__)
 
 # Initialize Flask app
 app = Flask(__name__)
-app.secret_key = 'a3e1f8c209bcfd1c88c17f5a41b8e66cbb19c2f5f8a9c37d'  # Required for session management
-
-# Initialize OpenAI (You'll need to set OPENAI_API_KEY in your environment)
-# Initialize OpenAI API key
-Config.initialize_openai()
-#OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
-#openai.api_key = OPENAI_API_KEY
-
-
-# Database Handler Functions
-def save_to_file(filename, data):
-    try:
-        directory = os.path.dirname(filename)
-        if directory and not os.path.exists(directory):
-            os.makedirs(directory)
-
-        with open(filename, "w") as file:
-            json.dump(data, file, indent=4)
-        print(f"Data successfully saved to {filename}")
-    except Exception as e:
-        print(f"Error saving data to {filename}: {e}")
-
-
-def load_from_file(filename):
-    try:
-        if not os.path.exists(filename):
-            print(f"File {filename} does not exist.")
-            return None
-
-        with open(filename, "r") as file:
-            data = json.load(file)
-        print(f"Data successfully loaded from {filename}")
-        return data
-    except Exception as e:
-        print(f"Error loading data from {filename}: {e}")
-        return None
-
-
-# Question Generator Class
-@dataclass
-class Question:
-    text: str
-    options: List[str]
+app.secret_key = 'a3e1f8c209bcfd1c88c17f5a41b8e66cbb19c2f5f8a9c37d'
 
 
 class QuestionGeneratorError(Exception):
     pass
 
 
-class QuestionGenerator:
-    def __init__(self, api_key: str, model: str = "gpt-3.5-turbo"):
-        self.api_key = api_key
+class OllamaQuestionGenerator:
+    def __init__(self, model: str = Config.OLLAMA_MODEL):
+        self.base_url = Config.OLLAMA_BASE_URL
         self.model = model
         self.last_api_call = 0
         self.min_delay = 1
-        openai.api_key = api_key
 
     def _validate_inputs(self, subject: str, experience: int) -> None:
         if not isinstance(subject, str) or not subject.strip():
@@ -91,48 +48,75 @@ class QuestionGenerator:
             "1. Be clear and concise\n"
             "2. Have exactly 4 options\n"
             "3. Include one correct answer and three plausible distractors\n"
-            "4. Be formatted as 'Question\nA) Option1\nB) Option2\nC) Option3\nD) Option4'"
+            "4. Format each question as a JSON object with the following structure:\n"
+            "{\n"
+            '  "text": "question text",\n'
+            '  "options": ["option1", "option2", "option3", "option4"],\n'
+            '  "correct_option": 0  // index of correct answer (0-3)\n'
+            "}\n"
+            "5. Return an array of these question objects"
         )
 
     def _call_api(self, prompt: str) -> str:
         try:
             self._rate_limit()
-            response = openai.ChatCompletion.create(
-                model=self.model,
-                messages=[
-                    {"role": "system",
-                     "content": "You are an educational expert specializing in creating assessment questions."},
-                    {"role": "user", "content": prompt}
-                ],
-                max_tokens=1000,
-                temperature=0.7
+            response = requests.post(
+                f"{self.base_url}/api/generate",
+                json={
+                    "model": self.model,
+                    "prompt": prompt,
+                    "system": "You are an educational expert specializing in creating assessment questions.",
+                    "stream": False
+                }
             )
-            return response.choices[0].message.content
-        except openai.error.RateLimitError:
-            logger.error("Rate limit exceeded")
-            raise QuestionGeneratorError("API rate limit exceeded. Please try again later.")
-        except Exception as e:
-            logger.error(f"OpenAI API error: {e}")
+            response.raise_for_status()
+            return response.json()['response']
+        except requests.exceptions.RequestException as e:
+            logger.error(f"Ollama API error: {e}")
             raise QuestionGeneratorError(f"API error: {str(e)}")
+
+    def _parse_response(self, response: str) -> List[Dict[str, any]]:
+        try:
+            # Find the JSON array in the response
+            start_idx = response.find('[')
+            end_idx = response.rfind(']') + 1
+            if start_idx == -1 or end_idx == 0:
+                raise ValueError("No JSON array found in response")
+
+            json_str = response[start_idx:end_idx]
+            questions = json.loads(json_str)
+
+            # Validate question format
+            for q in questions:
+                if not all(k in q for k in ('text', 'options', 'correct_option')):
+                    raise ValueError("Invalid question format")
+                if len(q['options']) != 4:
+                    raise ValueError("Question must have exactly 4 options")
+
+            return questions
+        except Exception as e:
+            logger.error(f"Error parsing response: {e}")
+            return self.generate_mock_questions("default")
 
     def generate_questions(self, subject: str, experience: int) -> List[Dict[str, any]]:
         try:
             self._validate_inputs(subject, experience)
             prompt = self._construct_prompt(subject, experience)
             response = self._call_api(prompt)
-            return self.generate_mock_questions(subject)
+            return self._parse_response(response)
         except Exception as e:
             logger.error(f"Error generating questions: {e}")
             return self.generate_mock_questions(subject)
 
     def generate_mock_questions(self, subject: str) -> List[Dict[str, any]]:
+        # Keep the existing mock_data implementation
         mock_data = {
             "English": [
                 {
                     "text": "What is the main function of a thesis statement?",
                     "options": ["To summarize the entire essay", "To present the main argument", "To list all topics",
                                 "To cite sources"],
-                    "correct_option": 1  # Index of correct answer
+                    "correct_option": 1
                 },
                 {
                     "text": "Which literary device involves comparing unlike things using 'like' or 'as'?",
@@ -153,23 +137,16 @@ class QuestionGenerator:
                 }
             ]
         }
-        default_questions = [
-            {
-                "text": "Sample question for testing purposes?",
-                "options": ["Option A", "Option B", "Option C", "Option D"],
-                "correct_option": 0
-            },
-            {
-                "text": "Another sample question?",
-                "options": ["Choice 1", "Choice 2", "Choice 3", "Choice 4"],
-                "correct_option": 0
-            }
-        ]
-        return mock_data.get(subject, default_questions)
+        return mock_data.get(subject, mock_data["Math"])
 
 
 # Create question generator instance
-_generator = QuestionGenerator(OPENAI_API_KEY)
+_generator = OllamaQuestionGenerator()
+
+
+# Keep the rest of the main.py file the same...# Remove OPENAI_API_KEY parameter
+
+
 
 
 def generate_questions(subject: str, experience: int) -> List[Dict[str, any]]:
