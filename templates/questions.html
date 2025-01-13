@@ -5,6 +5,37 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Questions - Rate the Professionalism</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <style>
+        .option-buttons {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin: 15px 0;
+        }
+
+        .option-button {
+            padding: 10px 20px;
+            border: 2px solid #ddd;
+            background-color: white;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            flex: 1;
+            min-width: 200px;
+            text-align: left;
+        }
+
+        .option-button:hover {
+            background-color: #f0f0f0;
+            border-color: #999;
+        }
+
+        .option-button.selected {
+            background-color: #007bff;
+            color: white;
+            border-color: #0056b3;
+        }
+    </style>
 </head>
 <body>
     <div class="container">
@@ -18,19 +49,21 @@
         {% if questions %}
         <form action="{{ url_for('questions_page') }}" method="post">
             {% for question in questions %}
-            <div class="question">
+            <div class="question" id="question{{ loop.index }}">
                 <p><strong>Q{{ loop.index }}: {{ question.text }}</strong></p>
-                {% for option in question.options %}
-                <div class="option">
-                    <input type="radio"
-                           id="q{{ loop.index }}_{{ loop.index0 }}"
-                           name="q{{ loop.index }}"
-                           value="{{ loop.index0 }}"
-                           required
-                           onclick="saveSelection({{ loop.index }}, {{ loop.index0 }})">
-                    <label for="q{{ loop.index }}_{{ loop.index0 }}">{{ option }}</label>
-                </div>
-                {% endfor %}
+                <input type="hidden" id="q{{ loop.index }}" name="q{{ loop.index }}" required>
+                <div class="option-buttons">
+    {% for option in question.options %}
+    <button type="button"
+            class="option-button"
+            data-qnum="{{ loop.index }}"
+            data-optnum="{{ loop.index0 }}"
+            onclick="selectOption(this)">
+        {{ option }}
+    </button>
+    {% endfor %}
+</div>
+
                 <div class="justification">
                     <label for="justification{{ loop.index }}">Justification:</label>
                     <textarea
@@ -50,8 +83,25 @@
     </div>
 
     <script>
-        // Save selections to localStorage
-        function saveSelection(questionNumber, optionIndex) {
+        function selectOption(button) {
+            const questionNumber = button.getAttribute('data-qnum');
+            const optionIndex = button.getAttribute('data-optnum');
+
+            // Get the question container
+            const questionContainer = document.getElementById(`question${questionNumber}`);
+
+            // Remove selection from all buttons in this question
+            const buttons = questionContainer.querySelectorAll('.option-button');
+            buttons.forEach(btn => btn.classList.remove('selected'));
+
+            // Add selection to clicked button
+            button.classList.add('selected');
+
+            // Update hidden input
+            const hiddenInput = document.getElementById(`q${questionNumber}`);
+            hiddenInput.value = optionIndex;
+
+            // Save to localStorage
             localStorage.setItem(`q${questionNumber}_selection`, optionIndex);
         }
 
@@ -61,8 +111,7 @@
 
         // Restore selections when page loads
         window.onload = function() {
-            const form = document.querySelector('form');
-            const questions = form.querySelectorAll('.question');
+            const questions = document.querySelectorAll('.question');
 
             questions.forEach((question, index) => {
                 const questionNumber = index + 1;
@@ -70,8 +119,12 @@
                 const savedJustification = localStorage.getItem(`q${questionNumber}_justification`);
 
                 if (savedSelection !== null) {
-                    const radio = question.querySelector(`#q${questionNumber}_${savedSelection}`);
-                    if (radio) radio.checked = true;
+                    const button = question.querySelector(`button[data-qnum="${questionNumber}"][data-optnum="${savedSelection}"]`);
+                    if (button) {
+                        button.classList.add('selected');
+                        const hiddenInput = document.getElementById(`q${questionNumber}`);
+                        hiddenInput.value = savedSelection;
+                    }
                 }
 
                 if (savedJustification) {
