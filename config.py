@@ -6,11 +6,10 @@ from dotenv import load_dotenv
 # Load environment variables from .env file if present
 load_dotenv()
 
-
 class Config:
-    # OpenAI API Configuration
-    OPENAI_API_KEY = os.getenv('OPENAI_API_KEY',
-                               "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")
+    # Ollama Configuration
+    OLLAMA_BASE_URL = os.getenv('OLLAMA_BASE_URL', 'http://localhost:11434')
+    OLLAMA_MODEL = os.getenv('OLLAMA_MODEL', 'llama2:1b')
 
     # File paths
     QUESTIONS_FILE = os.path.join("data", "questions.json")
@@ -23,14 +22,6 @@ class Config:
 
     # Application settings
     MAX_QUESTIONS = 10
-
-    @classmethod
-    def initialize_openai(cls):
-        """Initialize OpenAI with the API key"""
-        import openai
-        openai.api_key = cls.OPENAI_API_KEY
-        return openai
-
 
 # Create a config instance
 config = Config()
